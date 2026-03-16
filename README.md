@@ -1,4 +1,4 @@
-# AI Project Generator OS – Usage Guide
+# AI Project Generator OS
 
 This generator script creates a fully initialized AI-ready project with Git and optional GitHub repository setup.
 Follow the instructions below to create a new project and optionally connect it to your own GitHub account.
