@@ -1,20 +1,61 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-PROJECT_NAME=$1
-GITHUB_REPO=$2
+########################################
+# ARGUMENTS
+########################################
 
-if [ -z "$PROJECT_NAME" ]; then
- echo "Usage:"
- echo "./generate_ai_project.sh <project-name> [github-user/repo]"
- exit 1
+PROJECT_NAME="${1:-}"
+GITHUB_REPO="${2:-}"
+
+if [[ -z "$PROJECT_NAME" ]]; then
+  echo "Usage:"
+  echo "./generate_ai_project.sh <project-name> [github-user/repo]"
+  exit 1
 fi
+
+########################################
+# ENVIRONMENT CHECKS
+########################################
+
+echo "Checking environment..."
+
+command -v git >/dev/null 2>&1 || { echo "git is required"; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "python3 is required"; exit 1; }
+
+if command -v gh >/dev/null 2>&1; then
+  GH_AVAILABLE=true
+else
+  GH_AVAILABLE=false
+fi
+
+########################################
+# PREVENT RUNNING INSIDE GIT REPO
+########################################
+
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Error: This script must NOT be run inside an existing Git repository."
+  exit 1
+fi
+
+########################################
+# PREVENT OVERWRITE
+########################################
+
+if [[ -d "$PROJECT_NAME" ]]; then
+  echo "Error: Directory '$PROJECT_NAME' already exists."
+  exit 1
+fi
+
+########################################
+# CREATE PROJECT
+########################################
 
 echo "Creating project: $PROJECT_NAME"
 
-mkdir -p $PROJECT_NAME
-cd $PROJECT_NAME
+mkdir -p "$PROJECT_NAME"
+cd "$PROJECT_NAME"
 
 ########################################
 # STRUCTURE
@@ -31,13 +72,56 @@ tasks \
 runs \
 observability \
 security \
+src \
 .github/workflows
+
+########################################
+# SAFE FILE WRITER
+########################################
+
+create_file () {
+  FILE_PATH="$1"
+
+  if [[ -f "$FILE_PATH" ]]; then
+    echo "Skipping existing file: $FILE_PATH"
+    return
+  fi
+
+  cat > "$FILE_PATH"
+}
+
+########################################
+# README
+########################################
+
+create_file README.md << 'EOF'
+# AI Project OS
+
+AI-driven development scaffold.
+
+## Structure
+
+agents/ — agent prompts and planning  
+core/ — orchestration systems  
+tasks/ — task manifests  
+runs/ — execution logs  
+observability/ — telemetry  
+security/ — policies  
+
+## Setup
+
+Requires:
+
+- Python 3.10+
+- Git
+- Optional: GitHub CLI
+EOF
 
 ########################################
 # SYSTEM PROMPT
 ########################################
 
-cat > agents/prompts/system_prompt.txt << 'EOF'
+create_file agents/prompts/system_prompt.txt << 'EOF'
 You are the AI Project Agent.
 
 Workflow:
@@ -60,157 +144,180 @@ EOF
 # TASK PLANNER
 ########################################
 
-cat > agents/planner/task_planner.py << 'EOF'
+create_file agents/planner/task_planner.py << 'EOF'
 import json
 
 def plan_task(task):
 
- plan = {
-  "task_id": task["task_id"],
-  "steps": [],
-  "tests": task.get("tests",[])
- }
+    plan = {
+        "task_id": task["task_id"],
+        "steps": [],
+        "tests": task.get("tests", [])
+    }
 
- plan["steps"].append({
-  "id":"analysis",
-  "action":"analyze_repo"
- })
+    plan["steps"].append({
+        "id": "analysis",
+        "action": "analyze_repo"
+    })
 
- plan["steps"].append({
-  "id":"patch",
-  "action":"create_patch"
- })
+    plan["steps"].append({
+        "id": "patch",
+        "action": "create_patch"
+    })
 
- return plan
+    return plan
 EOF
 
 ########################################
 # ORCHESTRATOR
 ########################################
 
-cat > core/orchestrator/runner.py << 'EOF'
+create_file core/orchestrator/runner.py << 'EOF'
 import os
 import json
 
-TASK_DIR="tasks"
+TASK_DIR = "tasks"
 
 def load_tasks():
+    tasks = []
 
- tasks=[]
+    if not os.path.exists(TASK_DIR):
+        return tasks
 
- for f in os.listdir(TASK_DIR):
-  if f.endswith(".json"):
-   tasks.append(json.load(open(os.path.join(TASK_DIR,f))))
+    for f in os.listdir(TASK_DIR):
+        if f.endswith(".json"):
+            path = os.path.join(TASK_DIR, f)
+            with open(path) as fp:
+                tasks.append(json.load(fp))
 
- return tasks
+    return tasks
 
 def run():
+    tasks = load_tasks()
 
- tasks=load_tasks()
+    for t in tasks:
+        print("Running task:", t.get("task_id"))
 
- for t in tasks:
-  print("Running task:",t["task_id"])
-
-if __name__=="__main__":
- run()
+if __name__ == "__main__":
+    run()
 EOF
 
 ########################################
-# REPO KNOWLEDGE GRAPH (RAG BASE)
+# REPO INDEX
 ########################################
 
-cat > core/repo_index/build_index.py << 'EOF'
-import os,json
+create_file core/repo_index/build_index.py << 'EOF'
+import os
+import json
 
-GRAPH="core/repo_index/repo_graph.json"
+GRAPH = "core/repo_index/repo_graph.json"
+
+EXCLUDE = {".git", "__pycache__", ".env"}
 
 def build():
 
- graph={}
+    graph = {}
 
- for path,dirs,files in os.walk("."):
-  graph[path]=files
+    for path, dirs, files in os.walk("."):
 
- json.dump(graph,open(GRAPH,"w"))
+        dirs[:] = [d for d in dirs if d not in EXCLUDE]
 
-if __name__=="__main__":
- build()
+        if any(x in path for x in EXCLUDE):
+            continue
+
+        graph[path] = files
+
+    with open(GRAPH, "w") as f:
+        json.dump(graph, f, indent=2)
+
+if __name__ == "__main__":
+    build()
 EOF
 
 ########################################
 # MEMORY STORE
 ########################################
 
-cat > core/memory/memory.py << 'EOF'
+create_file core/memory/memory.py << 'EOF'
 import json
+import os
+from tempfile import NamedTemporaryFile
 
-STORE="core/memory/store.json"
+STORE = "core/memory/store.json"
 
 def save(entry):
 
- data=[]
+    data = []
 
- try:
-  data=json.load(open(STORE))
- except:
-  pass
+    if os.path.exists(STORE):
+        with open(STORE) as f:
+            try:
+                data = json.load(f)
+            except:
+                data = []
 
- data.append(entry)
+    data.append(entry)
 
- json.dump(data,open(STORE,"w"))
+    with NamedTemporaryFile("w", delete=False) as tmp:
+        json.dump(data, tmp, indent=2)
+        tempname = tmp.name
+
+    os.replace(tempname, STORE)
 EOF
 
 ########################################
-# AUTO PR CLI
+# CREATE PR SCRIPT
 ########################################
 
-cat > scripts/create_pr.py << 'EOF'
-import subprocess,sys
+create_file scripts/create_pr.py << 'EOF'
+import subprocess
+import sys
 
-title=sys.argv[1]
+if len(sys.argv) < 2:
+    print("Usage: create_pr.py <title>")
+    sys.exit(1)
 
-subprocess.run(["git","checkout","-b",title])
-subprocess.run(["git","add","."])
-subprocess.run(["git","commit","-m",title])
-subprocess.run(["git","push","-u","origin",title])
-subprocess.run(["gh","pr","create","--title",title])
+title = sys.argv[1]
+
+subprocess.run(["git", "checkout", "-b", title], check=True)
+subprocess.run(["git", "add", "."], check=True)
+subprocess.run(["git", "commit", "-m", title], check=True)
+subprocess.run(["git", "push", "-u", "origin", title], check=True)
+
+subprocess.run(["gh", "pr", "create", "--title", title], check=True)
 EOF
 
 ########################################
-# ISSUE -> TASK CONVERTER
+# ISSUE → TASK
 ########################################
 
-cat > scripts/issue_to_task.py << 'EOF'
-import json,sys
+create_file scripts/issue_to_task.py << 'EOF'
+import json
+import sys
+import os
 
-task={
- "task_id":sys.argv[1],
- "title":sys.argv[2],
- "allowed_files":["src/**"],
- "tests":[]
+if len(sys.argv) < 3:
+    print("Usage: issue_to_task.py <task_id> <title>")
+    sys.exit(1)
+
+task = {
+    "task_id": sys.argv[1],
+    "title": sys.argv[2],
+    "allowed_files": ["src/**"],
+    "tests": []
 }
 
-open(f"tasks/{task['task_id']}.json","w").write(json.dumps(task,indent=2))
+os.makedirs("tasks", exist_ok=True)
+
+with open(f"tasks/{task['task_id']}.json", "w") as f:
+    json.dump(task, f, indent=2)
 EOF
 
 ########################################
-# SECURITY POLICY
+# GITIGNORE
 ########################################
 
-cat > security/SECURITY.md << 'EOF'
-Security Policy
-
-No secrets in repo.
-Use environment variables.
-
-Secrets scanning enabled via CI.
-EOF
-
-########################################
-# .gitignore
-########################################
-
-cat > .gitignore << 'EOF'
+create_file .gitignore << 'EOF'
 runs/*
 logs/*
 observability/*
@@ -227,28 +334,23 @@ __pycache__/
 EOF
 
 ########################################
-# PRE COMMIT CONFIG
+# SECURITY
 ########################################
 
-cat > .pre-commit-config.yaml << 'EOF'
-repos:
+create_file security/SECURITY.md << 'EOF'
+Security Policy
 
-- repo: https://github.com/gitleaks/gitleaks
-  rev: v8.18.1
-  hooks:
-  - id: gitleaks
+No secrets in repository.
+Use environment variables.
 
-- repo: https://github.com/psf/black
-  rev: 23.3.0
-  hooks:
-  - id: black
+Secrets scanning enabled via CI.
 EOF
 
 ########################################
-# CI PIPELINE
+# CI
 ########################################
 
-cat > .github/workflows/ai_pipeline.yml << 'EOF'
+create_file .github/workflows/ai_pipeline.yml << 'EOF'
 name: AI Project CI
 
 on:
@@ -258,24 +360,22 @@ on:
 jobs:
 
  security:
-
   runs-on: ubuntu-latest
 
   steps:
-  - uses: actions/checkout@v4
+   - uses: actions/checkout@v4
 
-  - name: Run Gitleaks
-    uses: gitleaks/gitleaks-action@v2
+   - name: Run Gitleaks
+     uses: gitleaks/gitleaks-action@v2
 
  index:
-
   runs-on: ubuntu-latest
 
   steps:
-  - uses: actions/checkout@v4
+   - uses: actions/checkout@v4
 
-  - name: Build repo index
-    run: python core/repo_index/build_index.py
+   - name: Build repo index
+     run: python3 core/repo_index/build_index.py
 EOF
 
 ########################################
@@ -290,14 +390,17 @@ git commit -m "Initial AI Project OS"
 # CREATE GITHUB REPO
 ########################################
 
-if [ ! -z "$GITHUB_REPO" ]; then
+if [[ -n "$GITHUB_REPO" ]]; then
 
- echo "Creating GitHub repository..."
-
- gh repo create $GITHUB_REPO --private --source=. --remote=origin --push
+  if [[ "$GH_AVAILABLE" = true ]]; then
+    echo "Creating GitHub repository..."
+    gh repo create "$GITHUB_REPO" --private --source=. --remote=origin --push
+  else
+    echo "GitHub CLI not installed. Skipping repo creation."
+  fi
 
 fi
 
 echo ""
-echo "Project ready:"
+echo "Project created successfully:"
 echo "$PROJECT_NAME"
