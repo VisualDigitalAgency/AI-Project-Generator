@@ -1,0 +1,13 @@
+# Profile: solo
+# Single service + optional frontend. No gateway.
+profile: solo
+services:
+  - core-service
+gateway: false
+frontend: true
+workers: false
+notifications: false
+infra:
+  db: sqlite
+  cache: false
+  k8s: false

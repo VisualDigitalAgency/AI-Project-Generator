@@ -1,0 +1,57 @@
+# .github/workflows/pr-checks.yml
+# Fast feedback on every pull request
+
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  size-check:
+    name: PR Size Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check PR size
+        run: |
+          CHANGED=$(git diff --stat origin/${{ github.base_ref }}...HEAD | tail -1 | awk '{print $4}')
+          echo "Lines changed: $CHANGED"
+          if [ "$CHANGED" -gt 800 ]; then
+            echo "⚠️  Large PR ($CHANGED lines). Consider splitting."
+          fi
+
+  conventional-commits:
+    name: Commit Message Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: wagoid/commitlint-github-action@v6
+
+  required-files:
+    name: Required Files Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for test files
+        run: |
+          CHANGED_TS=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.(ts|tsx)$' | grep -v test | grep -v spec | grep -v \.d\.ts || true)
+          if [ -n "$CHANGED_TS" ]; then
+            echo "Changed TypeScript files (non-test):"
+            echo "$CHANGED_TS"
+            MISSING_TESTS=0
+            while IFS= read -r file; do
+              BASE="${file%.*}"
+              if ! git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -qE "(${BASE}\.test\.|${BASE}\.spec\.)"; then
+                echo "⚠️  Missing test for: $file"
+                MISSING_TESTS=$((MISSING_TESTS + 1))
+              fi
+            done <<< "$CHANGED_TS"
+            if [ "$MISSING_TESTS" -gt 0 ]; then
+              echo "::warning::$MISSING_TESTS file(s) changed without accompanying tests."
+            fi
+          fi

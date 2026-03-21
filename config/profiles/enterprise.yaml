@@ -1,0 +1,18 @@
+# Profile: enterprise
+# Full microservices. All services active.
+profile: enterprise
+services:
+  - api-gateway
+  - auth-service
+  - core-service
+  - worker-service
+  - notification-service
+gateway: true
+frontend: true
+workers: true
+notifications: true
+infra:
+  db: postgres
+  cache: redis
+  k8s: true
+  terraform: true

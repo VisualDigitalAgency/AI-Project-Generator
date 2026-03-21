@@ -1,0 +1,103 @@
+# docker-compose.yml
+# Profile-aware: use --profile flag to enable optional services
+# Examples:
+#   docker-compose up                          (solo profile: core only)
+#   docker-compose --profile startup up        (adds gateway + auth)
+#   docker-compose --profile enterprise up     (full stack)
+
+version: "3.9"
+
+x-common: &common
+  restart: unless-stopped
+  env_file: .env
+
+services:
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16
+    <<: *common
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports: ["5432:5432"]
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    <<: *common
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Core (all profiles) ──────────────────────────────────────────────────────
+  core-service:
+    build: { context: ./services/core-service, target: development }
+    <<: *common
+    ports: ["3002:3002"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    volumes: ["./services/core-service:/app", "/app/node_modules"]
+    environment:
+      PORT: "3002"
+      NODE_ENV: development
+
+  # ── Startup + Enterprise ─────────────────────────────────────────────────────
+  api-gateway:
+    build: { context: ./services/api-gateway }
+    <<: *common
+    profiles: [startup, enterprise]
+    ports: ["8080:8080"]
+    depends_on: [auth-service, core-service]
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:3001
+      CORE_SERVICE_URL: http://core-service:3002
+
+  auth-service:
+    build: { context: ./services/auth-service, target: development }
+    <<: *common
+    profiles: [startup, enterprise]
+    ports: ["3001:3001"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      PORT: "3001"
+      NODE_ENV: development
+
+  # ── Enterprise only ──────────────────────────────────────────────────────────
+  worker-service:
+    build: { context: ./services/worker-service, target: development }
+    <<: *common
+    profiles: [enterprise]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+
+  notification-service:
+    build: { context: ./services/notification-service, target: development }
+    <<: *common
+    profiles: [enterprise]
+    depends_on:
+      redis: { condition: service_healthy }
+
+  # ── Frontend (optional) ──────────────────────────────────────────────────────
+  frontend:
+    build: { context: ./frontend, target: development }
+    <<: *common
+    profiles: [startup, enterprise, frontend]
+    ports: ["3000:3000"]
+    volumes: ["./frontend:/app", "/app/node_modules", "/app/.next"]
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+
+volumes:
+  postgres-data:

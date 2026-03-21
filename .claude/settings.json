@@ -1,0 +1,26 @@
+{
+  "project": {
+    "name": "{{PROJECT_NAME}}",
+    "type": "{{PROJECT_TYPE}}",
+    "profile": "{{PROJECT_PROFILE}}",
+    "primaryLanguage": "{{PRIMARY_LANGUAGE}}"
+  },
+  "ai": {
+    "maxTokensPerRun": 8000,
+    "contextRefreshPerPhase": true,
+    "memoryPersistence": true,
+    "logLevel": "verbose"
+  },
+  "permissions": {
+    "allowFileWrite": true,
+    "allowShellExec": false,
+    "requireTestsForNewFeatures": true,
+    "enforceApiContracts": true
+  },
+  "approvalRequired": ["deploy", "db-migration", "secret-change", "external-agent"],
+  "profiles": {
+    "solo":       { "services": ["core-service"], "frontend": true, "gateway": false },
+    "startup":    { "services": ["api-gateway", "core-service", "auth-service"], "frontend": true, "gateway": true },
+    "enterprise": { "services": ["api-gateway", "auth-service", "core-service", "worker-service", "notification-service"], "frontend": true, "gateway": true }
+  }
+}

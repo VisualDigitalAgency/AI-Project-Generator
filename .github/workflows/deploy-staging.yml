@@ -1,0 +1,43 @@
+# .github/workflows/deploy-staging.yml
+# Auto-deploys to staging on push to develop
+
+name: Deploy — Staging
+
+on:
+  push:
+    branches: [develop]
+
+needs_ci: true
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_STAGING }}
+
+      - name: Deploy to staging
+        run: |
+          kubectl set image deployment/api-gateway \
+            api-gateway=ghcr.io/${{ github.repository }}/api-gateway:${{ github.sha }} \
+            -n staging
+          kubectl set image deployment/auth-service \
+            auth-service=ghcr.io/${{ github.repository }}/auth-service:${{ github.sha }} \
+            -n staging
+          kubectl set image deployment/core-service \
+            core-service=ghcr.io/${{ github.repository }}/core-service:${{ github.sha }} \
+            -n staging
+          kubectl rollout status deployment/api-gateway -n staging --timeout=5m
+          kubectl rollout status deployment/auth-service -n staging --timeout=5m
+          kubectl rollout status deployment/core-service -n staging --timeout=5m
+
+      - name: Run smoke tests
+        run: |
+          curl -f ${{ vars.STAGING_URL }}/health || exit 1

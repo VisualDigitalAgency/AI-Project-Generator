@@ -1,0 +1,54 @@
+# ─── Dependencies ────────────────────────────────────────────────────────────
+node_modules/
+vendor/
+target/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ─── Build outputs ───────────────────────────────────────────────────────────
+dist/
+build/
+.next/
+out/
+*.js.map
+
+# ─── Environment ─────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ─── Secrets ─────────────────────────────────────────────────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# ─── Editor ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+runs/*/
+
+# ─── Test coverage ───────────────────────────────────────────────────────────
+coverage/
+.coverage
+htmlcov/
+*.lcov
+
+# ─── Docker ──────────────────────────────────────────────────────────────────
+.docker/
+
+# ─── Terraform ───────────────────────────────────────────────────────────────
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.backup

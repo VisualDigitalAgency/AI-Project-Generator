@@ -1,0 +1,41 @@
+# Language configurations for each service.
+# Updated by `scripts/init.sh` based on your profile choices.
+
+defaults:
+  typescript:
+    runtime: node
+    version: "20"
+    packageManager: pnpm
+    formatter: prettier
+    linter: eslint
+    testFramework: vitest
+    buildCmd: "tsc --noEmit"
+
+  go:
+    version: "1.22"
+    formatter: gofmt
+    linter: golangci-lint
+    testFramework: go test
+    buildCmd: "go build ./..."
+
+  python:
+    version: "3.12"
+    packageManager: uv
+    formatter: black
+    linter: ruff
+    testFramework: pytest
+    buildCmd: "python -m py_compile"
+
+  rust:
+    edition: "2021"
+    formatter: rustfmt
+    linter: clippy
+    testFramework: cargo test
+    buildCmd: "cargo build"
+
+services:
+  api-gateway:       { language: go }
+  auth-service:      { language: typescript }
+  core-service:      { language: "{{PRIMARY_LANGUAGE}}" }
+  worker-service:    { language: "{{PRIMARY_LANGUAGE}}" }
+  notification-service: { language: typescript }

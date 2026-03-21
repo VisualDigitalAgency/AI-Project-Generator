@@ -1,0 +1,15 @@
+# Profile: startup
+# 2-3 services + gateway. Standard production setup.
+profile: startup
+services:
+  - api-gateway
+  - auth-service
+  - core-service
+gateway: true
+frontend: true
+workers: false
+notifications: false
+infra:
+  db: postgres
+  cache: redis
+  k8s: false

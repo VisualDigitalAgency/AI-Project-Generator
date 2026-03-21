@@ -1,0 +1,48 @@
+# Agent Registry
+# All agents must be registered here with explicit permissions.
+
+agents:
+  - id: feature-builder
+    path: agents/core/feature-builder.md
+    permissions: [read, write-code, write-tests, write-docs]
+    trusted: true
+    requiresApproval: false
+
+  - id: reviewer
+    path: agents/core/reviewer.md
+    permissions: [read]
+    trusted: true
+    requiresApproval: false
+
+  - id: critic
+    path: agents/core/critic.md
+    permissions: [read]
+    trusted: true
+    requiresApproval: false
+
+  - id: test-agent
+    path: agents/core/test-agent.md
+    permissions: [read, write-tests]
+    trusted: true
+    requiresApproval: false
+
+  - id: debugger
+    path: agents/core/debugger.md
+    permissions: [read, write-logs]
+    trusted: true
+    requiresApproval: false
+
+  - id: ui-generator
+    path: agents/external/ui-generator/agent.md
+    adapter: agents/external/ui-generator/adapter.md
+    permissions: [write-frontend]
+    trusted: false
+    requiresApproval: true
+
+  - id: security-auditor
+    path: agents/external/security-auditor/agent.md
+    adapter: agents/external/security-auditor/adapter.md
+    permissions: [read]
+    trusted: false
+    requiresApproval: true
+    runOn: [review-phase, pre-deploy]
